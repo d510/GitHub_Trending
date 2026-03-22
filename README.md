@@ -2,6 +2,8 @@
 
 GitHub のトレンドリポジトリを自動収集し、AI がトレンドの背景を解説するインタラクティブダッシュボード。
 
+**[ダッシュボードを見る →](https://d510.github.io/GitHub_Trending/)**
+
 ![Dashboard Preview](docs/assets/preview.png)
 
 ---
