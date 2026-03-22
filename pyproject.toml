@@ -1,0 +1,15 @@
+[project]
+name = "github-trending-analyzer"
+version = "0.1.0"
+description = "GitHub トレンド分析ダッシュボード"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "anthropic>=0.40.0",
+    "jinja2>=3.1.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

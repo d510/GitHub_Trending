@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitHub Trending Analyzer</title>
+<script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header>
+  <h1>📊 GitHub Trending Analyzer</h1>
+  <p class="subtitle">GitHubのトレンドをAIが自動分析 — 毎週更新</p>
+  <p class="updated" id="updated-date"></p>
+</header>
+
+<main>
+  <!-- AI解説セクション -->
+  <section class="card ai-commentary">
+    <h2>🤖 AIトレンド解説</h2>
+    <p id="commentary" class="commentary-text"></p>
+    <div id="highlights" class="highlights-grid"></div>
+  </section>
+
+  <!-- チャートセクション -->
+  <div class="charts-grid">
+    <section class="card">
+      <h2>🏆 期間別キーワードランキング</h2>
+      <div class="period-tabs">
+        <button class="tab active" data-period="week">1週間</button>
+        <button class="tab" data-period="month">1ヶ月</button>
+        <button class="tab" data-period="year">1年</button>
+      </div>
+      <div id="keywords-chart"></div>
+    </section>
+
+    <section class="card">
+      <h2>💻 言語別スター数</h2>
+      <div id="language-chart"></div>
+    </section>
+  </div>
+
+  <div class="charts-grid">
+    <section class="card">
+      <h2>🔥 キーワードマップ</h2>
+      <div id="treemap-chart"></div>
+    </section>
+
+    <section class="card">
+      <h2>📈 変化点</h2>
+      <div id="changes-section">
+        <div id="rising-list" class="change-list"></div>
+        <div id="new-list" class="change-list"></div>
+      </div>
+      <div id="change-points"></div>
+    </section>
+  </div>
+
+  <!-- 注目リポジトリ -->
+  <section class="card">
+    <h2>⭐ 注目リポジトリ（直近1週間）</h2>
+    <div id="top-repos" class="repos-grid"></div>
+  </section>
+</main>
+
+<footer>
+  <p>GitHub Trending Analyzer — Powered by GitHub API &amp; Claude AI</p>
+</footer>
+
+<script>
+const DATA_URL = 'data/latest.json';
+
+async function init() {
+  const resp = await fetch(DATA_URL);
+  const data = await resp.json();
+  render(data);
+}
+
+function render(data) {
+  // 更新日
+  document.getElementById('updated-date').textContent =
+    `最終更新: ${data.generated_at?.slice(0, 10) || '不明'}`;
+
+  // AI解説
+  renderCommentary(data.analysis || {});
+
+  // チャート
+  renderKeywordsChart(data.keywords || {}, 'week');
+  renderLanguageChart(data.snapshot || {});
+  renderTreemap(data.keywords || {});
+  renderChanges(data.keywords?.changes || {});
+  renderChangePoints(data.analysis?.change_points || []);
+  renderTopRepos(data.snapshot || {});
+
+  // タブ切り替え
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderKeywordsChart(data.keywords || {}, btn.dataset.period);
+    });
+  });
+}
+
+function renderCommentary(analysis) {
+  document.getElementById('commentary').textContent =
+    analysis.commentary || 'AI分析データがありません';
+
+  const grid = document.getElementById('highlights');
+  grid.innerHTML = '';
+  (analysis.highlights || []).forEach(h => {
+    const colors = { positive: '#22c55e', negative: '#ef4444', neutral: '#64748b' };
+    const card = document.createElement('div');
+    card.className = 'highlight-card';
+    card.style.borderLeftColor = colors[h.sentiment] || colors.neutral;
+    card.innerHTML = `<h3>${h.title}</h3><p>${h.description}</p>`;
+    grid.appendChild(card);
+  });
+}
+
+function renderKeywordsChart(keywords, period) {
+  const periodData = keywords?.by_period?.[period] || [];
+  const top15 = periodData.slice(0, 15);
+  const labels = top15.map(([kw]) => kw).reverse();
+  const values = top15.map(([, c]) => c).reverse();
+
+  Plotly.newPlot('keywords-chart', [{
+    type: 'bar',
+    x: values,
+    y: labels,
+    orientation: 'h',
+    marker: { color: '#6366f1' },
+  }], {
+    margin: { l: 120, r: 20, t: 10, b: 40 },
+    height: 400,
+    xaxis: { title: '出現回数' },
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: '#e2e8f0' },
+  }, { responsive: true });
+}
+
+function renderLanguageChart(snapshot) {
+  const byLang = snapshot.by_language || {};
+  const langs = Object.keys(byLang);
+  const periods = ['week', 'month', 'year'];
+  const periodLabels = { week: '1週間', month: '1ヶ月', year: '1年' };
+  const colors = ['#6366f1', '#22c55e', '#f59e0b'];
+
+  const traces = periods.map((p, i) => ({
+    name: periodLabels[p],
+    type: 'bar',
+    x: langs,
+    y: langs.map(l => {
+      const repos = byLang[l]?.[p] || [];
+      return repos.reduce((sum, r) => sum + r.stars, 0);
+    }),
+    marker: { color: colors[i] },
+  }));
+
+  Plotly.newPlot('language-chart', traces, {
+    barmode: 'group',
+    margin: { l: 60, r: 20, t: 10, b: 60 },
+    height: 400,
+    yaxis: { title: '総スター数' },
+    legend: { orientation: 'h', y: 1.12 },
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: '#e2e8f0' },
+  }, { responsive: true });
+}
+
+function renderTreemap(keywords) {
+  const overall = (keywords?.overall || []).slice(0, 30);
+  if (overall.length === 0) return;
+
+  const labels = overall.map(([kw]) => kw);
+  const values = overall.map(([, c]) => c);
+  const parents = overall.map(() => '');
+
+  Plotly.newPlot('treemap-chart', [{
+    type: 'treemap',
+    labels: labels,
+    parents: parents,
+    values: values,
+    textinfo: 'label+value',
+    marker: {
+      colorscale: 'Viridis',
+      colors: values,
+    },
+  }], {
+    margin: { l: 10, r: 10, t: 10, b: 10 },
+    height: 400,
+    paper_bgcolor: 'transparent',
+    font: { color: '#e2e8f0' },
+  }, { responsive: true });
+}
+
+function renderChanges(changes) {
+  const risingEl = document.getElementById('rising-list');
+  const newEl = document.getElementById('new-list');
+
+  risingEl.innerHTML = '<h3>🚀 急上昇</h3>';
+  (changes.rising || []).slice(0, 8).forEach(r => {
+    risingEl.innerHTML += `<div class="change-item rising">
+      <span class="kw">${r.keyword}</span>
+      <span class="delta">↑ ${r.ratio}x (${r.prev_count}→${r.count})</span>
+    </div>`;
+  });
+
+  newEl.innerHTML = '<h3>✨ 新出</h3>';
+  (changes.new || []).slice(0, 8).forEach(r => {
+    newEl.innerHTML += `<div class="change-item new">
+      <span class="kw">${r.keyword}</span>
+      <span class="delta">${r.count}件</span>
+    </div>`;
+  });
+}
+
+function renderChangePoints(changePoints) {
+  const el = document.getElementById('change-points');
+  el.innerHTML = '';
+  changePoints.forEach(cp => {
+    const icon = cp.direction === 'up' ? '📈' : cp.direction === 'down' ? '📉' : '🆕';
+    el.innerHTML += `<div class="change-point">
+      <span class="cp-icon">${icon}</span>
+      <div>
+        <strong>${cp.keyword}</strong>
+        <p>${cp.explanation}</p>
+      </div>
+    </div>`;
+  });
+}
+
+function renderTopRepos(snapshot) {
+  const el = document.getElementById('top-repos');
+  el.innerHTML = '';
+
+  // 直近1週間の全言語からスター順でトップ12
+  const weekRepos = [];
+  const seen = new Set();
+  for (const [, periods] of Object.entries(snapshot.by_language || {})) {
+    for (const repo of (periods.week || [])) {
+      if (!seen.has(repo.full_name)) {
+        seen.add(repo.full_name);
+        weekRepos.push(repo);
+      }
+    }
+  }
+  weekRepos.sort((a, b) => b.stars - a.stars);
+
+  weekRepos.slice(0, 12).forEach(r => {
+    el.innerHTML += `<a class="repo-card" href="${r.url}" target="_blank" rel="noopener">
+      <div class="repo-name">${r.full_name}</div>
+      <div class="repo-desc">${r.description || ''}</div>
+      <div class="repo-meta">
+        <span>⭐ ${r.stars.toLocaleString()}</span>
+        <span>🍴 ${r.forks.toLocaleString()}</span>
+        <span class="repo-lang">${r.language || ''}</span>
+      </div>
+    </a>`;
+  });
+}
+
+init();
+</script>
+</body>
+</html>
