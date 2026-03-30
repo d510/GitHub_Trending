@@ -5,13 +5,14 @@ on:
     - cron: '0 6 * * 1'  # 毎週月曜 JST 15:00
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GH_PAT }}
 
       - uses: actions/setup-python@v5
         with:
